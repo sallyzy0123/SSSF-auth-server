@@ -1,38 +1,26 @@
-// mongoose schema for user
-// intface User is located in src/interfaces/User.ts
-
 import mongoose from 'mongoose';
-import {User} from '../../interfaces/User';
+import {User} from '../../types/DBTypes';
 
-const userModel = new mongoose.Schema<User>({
+const userSchema = new mongoose.Schema<User>({
   user_name: {
     type: String,
-    required: true,
+    minlength: [3, 'Username must be at least 3 characters'],
+    unique: true,
   },
   email: {
     type: String,
     required: true,
     unique: true,
   },
-  role: {
-    type: String,
-    enum: ['user', 'admin'],
-    default: 'user',
-  },
   password: {
     type: String,
+    minlength: [4, 'Password must be at least 4 characters'],
+  },
+  role: {
+    type: String,
     required: true,
+    enum: ['user', 'admin'],
   },
 });
 
-// Duplicate the ID field.
-userModel.virtual('id').get(function () {
-  return this._id.toHexString();
-});
-
-// Ensure virtual fields are serialised.
-userModel.set('toJSON', {
-  virtuals: true,
-});
-
-export default mongoose.model<User>('User', userModel);
+export default mongoose.model<User>('User', userSchema);
