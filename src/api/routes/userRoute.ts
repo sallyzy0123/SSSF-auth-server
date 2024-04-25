@@ -7,6 +7,7 @@ import {
   userListGet,
   userPost,
   userPut,
+  userAdminDelete,
 } from '../controllers/userController';
 import {authenticate} from '../../middlewares';
 import {body} from 'express-validator';
@@ -28,6 +29,6 @@ router
 
 // router.route('/check').get(check);
 
-router.route('/:id').get(userGet);
+router.route('/:id').get(userGet).delete(authenticate, userAdminDelete);
 
 export default router;

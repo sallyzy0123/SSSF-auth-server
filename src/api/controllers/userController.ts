@@ -1,3 +1,4 @@
+import jwt from 'jsonwebtoken';
 // Description: This file contains the functions for the user routes
 // TODO: add function check, to check if the server is alive
 // TODO: add function to get all users
@@ -7,7 +8,7 @@
 // TODO: add function to delete a user
 // TODO: add function to check if a token is valid
 import {Request, Response, NextFunction} from 'express';
-import {User} from '../../types/DBTypes';
+import {User, UserWithoutPassword} from '../../types/DBTypes';
 import {MessageResponse} from '../../types/MessageTypes';
 import userModel from '../models/userModel';
 import CustomError from '../../classes/CustomError';
@@ -69,45 +70,94 @@ const userPost = async (
 };
 
 const userPut = async (
-  req: Request<{id: string}, {}, Omit<User, 'user_id'>>,
-  res: Response<MessageResponse & {data: User}>,
+  req: Request<{}, {}, Omit<User, 'user_id'>>,
+  res: Response<MessageResponse & {user: User}>,
   next: NextFunction
 ) => {
   try {
-    const user = await userModel
-      .findByIdAndUpdate(req.params.id, req.body, {
-        new: true,
-      })
-      .select('-password -__v -role');
-    if (!user) {
-      throw new CustomError('No user found', 404);
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      const token = authHeader?.split(' ')[1];
+      const userFromToken = jwt.verify(
+        token,
+        process.env.JWT_SECRET as string
+      ) as UserWithoutPassword;
+      if (req.body.password) {
+        req.body.password = bcrypt.hashSync(req.body.password, 10);
+      }
+
+      const user = await userModel
+        .findByIdAndUpdate(userFromToken._id, req.body, {
+          new: true,
+        })
+        .select('-password -__v -role');
+      if (!user) {
+        throw new CustomError('No user found', 404);
+      }
+      const response = {
+        message: 'User updated',
+        user: user,
+      };
+      console.log('response', response);
+      res.json(response);
     }
-    const response = {
-      message: 'User updated',
-      data: user,
-    };
-    res.json(response);
   } catch (error) {
     next(error);
   }
 };
 
 const userDelete = async (
-  req: Request<{id: string}, {}, {}>,
-  res: Response<MessageResponse>,
+  req: Request<{}, {}, {}>,
+  res: Response<MessageResponse & {user: User}>,
   next: NextFunction
 ) => {
   try {
-    const user = await userModel
-      .findByIdAndDelete(req.params.id)
-      .select('-password -__v -role');
-    if (!user) {
-      throw new CustomError('No user found', 404);
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      const token = authHeader?.split(' ')[1];
+      const userFromToken = jwt.verify(
+        token,
+        process.env.JWT_SECRET as string
+      ) as UserWithoutPassword;
+      const user = await userModel
+        .findByIdAndDelete(userFromToken._id)
+        .select('-password -__v -role');
+      if (!user) {
+        throw new CustomError('No user found', 404);
+      }
+      res.json({message: 'User deleted', user: user});
     }
-    res.json({message: 'User deleted'});
   } catch (error) {
     next(error);
   }
 };
 
-export {userListGet, userGet, userPost, userPut, userDelete};
+const userAdminDelete = async (
+  req: Request<{id: string}, {}, {}>,
+  res: Response<MessageResponse & {user: User}>,
+  next: NextFunction
+) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      const token = authHeader?.split(' ')[1];
+      const userFromToken = jwt.verify(
+        token,
+        process.env.JWT_SECRET as string
+      ) as UserWithoutPassword;
+      if (userFromToken.role === 'admin') {
+        const user = await userModel
+          .findByIdAndDelete(req.params.id)
+          .select('-password -__v -role');
+        if (!user) {
+          throw new CustomError('No user found', 404);
+        }
+        res.json({message: 'User deleted', user: user});
+      }
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+export {userListGet, userGet, userPost, userPut, userDelete, userAdminDelete};
